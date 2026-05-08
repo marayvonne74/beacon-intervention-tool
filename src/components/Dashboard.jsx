@@ -8,12 +8,18 @@ import { useStudents } from '../hooks/useStudents';
 import { useStaff } from '../hooks/useStaff';
 import { useInterventionSummary } from '../hooks/useInterventionSummary';
 import { useBulkTriage } from '../hooks/useBulkTriage';
+import { loadFilters, saveFilters } from '../services/storage';
 
 export default function Dashboard() {
   const { students, loading, error, refreshStudent } = useStudents();
   const { staff, addStaffMember, removeStaffMember } = useStaff();
   const { summary, refresh: refreshSummary } = useInterventionSummary(staff);
-  const [filters, setFilters] = useState({ tier: 'all', grade: 'all', status: 'all' });
+  const [filters, setFilters] = useState(() => loadFilters());
+
+  function handleFilterChange(newFilters) {
+    setFilters(newFilters);
+    saveFilters(newFilters);
+  }
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const handleInterventionUpdate = useCallback((studentId) => {
@@ -123,7 +129,7 @@ export default function Dashboard() {
             <div className="mb-5">
               <FilterBar
                 filters={filters}
-                onChange={setFilters}
+                onChange={handleFilterChange}
                 counts={{ shown: filtered.length, total: students.length }}
               />
             </div>

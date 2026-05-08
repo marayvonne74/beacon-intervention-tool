@@ -6,6 +6,7 @@ const KEYS = {
   TRIAGE: 'beacon_triage',
   EFFECTIVENESS: 'beacon_effectiveness',
   SNAPSHOTS: 'beacon_snapshots',
+  FILTERS: 'beacon_filters',
 };
 
 function load(key, fallback) {
@@ -108,4 +109,22 @@ export function addSnapshot(studentId, snapshot) {
   if (!all[studentId]) all[studentId] = [];
   all[studentId].push(snapshot);
   localStorage.setItem(KEYS.SNAPSHOTS, JSON.stringify(all));
+}
+
+// ─── Filters ──────────────────────────────────────────────────────────────────
+
+const DEFAULT_FILTERS = { tier: 'all', grade: 'all', status: 'all' };
+
+export function loadFilters() {
+  return load(KEYS.FILTERS, DEFAULT_FILTERS);
+}
+
+export function saveFilters(filters) {
+  save(KEYS.FILTERS, filters);
+}
+
+// ─── Reset ────────────────────────────────────────────────────────────────────
+
+export function clearAllData() {
+  Object.values(KEYS).forEach((key) => localStorage.removeItem(key));
 }

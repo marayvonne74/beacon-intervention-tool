@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { clearAllData } from '../services/storage';
 
 export default function SettingsPanel({ staff, onAddStaff, onRemoveStaff, onClose }) {
   const [name, setName] = useState('');
@@ -74,6 +75,19 @@ export default function SettingsPanel({ staff, onAddStaff, onRemoveStaff, onClos
               Add Staff Member
             </button>
           </form>
+        </div>
+
+        <div className="px-6 pb-5 pt-2 border-t border-slate-100 mt-2">
+          <p className="text-[11px] text-slate-400 mb-2 uppercase tracking-widest font-semibold">Danger Zone</p>
+          <button
+            onClick={() => { clearAllData(); window.location.reload(); }}
+            className="w-full py-2 text-sm font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+          >
+            Reset Demo Data
+          </button>
+          <p className="text-xs text-slate-400 mt-1.5 text-center">
+            Clears all triage results, interventions, and staff data.
+          </p>
         </div>
       </div>
     </div>

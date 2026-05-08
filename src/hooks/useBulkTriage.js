@@ -47,6 +47,21 @@ export function useBulkTriage(students, { onStudentComplete } = {}) {
     started.current = true;
 
     const cached = loadTriage();
+
+    // Always hydrate state from cache so StudentCard sees results without API calls
+    const cachedResults = {};
+    const initialStatus = {};
+    students.forEach((s) => {
+      if (cached[s.id]) {
+        cachedResults[s.id] = cached[s.id];
+        initialStatus[s.id] = 'done';
+      } else {
+        initialStatus[s.id] = 'queued';
+      }
+    });
+    setTriageResults(cachedResults);
+    setTriageStatus(initialStatus);
+
     const needsTriage = students.filter((s) => !cached[s.id]);
 
     if (needsTriage.length === 0) return;
