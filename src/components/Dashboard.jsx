@@ -1,16 +1,25 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import StudentCard from './StudentCard';
 import FilterBar from './FilterBar';
 import SettingsPanel from './SettingsPanel';
+import SummaryPanel from './SummaryPanel';
 import EmptyState from './EmptyState';
 import { useStudents } from '../hooks/useStudents';
 import { useStaff } from '../hooks/useStaff';
+import { useInterventionSummary } from '../hooks/useInterventionSummary';
 
 export default function Dashboard() {
   const { students, loading, error, refreshStudent } = useStudents();
   const { staff, addStaffMember, removeStaffMember } = useStaff();
+  const { summary, refresh: refreshSummary } = useInterventionSummary(staff);
   const [filters, setFilters] = useState({ tier: 'all', grade: 'all', status: 'all' });
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // Single callback: refresh per-student status + summary metrics simultaneously
+  const handleInterventionUpdate = useCallback((studentId) => {
+    refreshStudent(studentId);
+    refreshSummary();
+  }, [refreshStudent, refreshSummary]);
 
   const filtered = useMemo(() => {
     return students.filter((s) => {
@@ -45,7 +54,6 @@ export default function Dashboard() {
           </div>
 
           <div className="flex items-center gap-4">
-            {/* Tier summary pills */}
             <div className="hidden sm:flex items-center gap-2">
               <TierPill tier={3} count={tierCounts[3]} />
               <TierPill tier={2} count={tierCounts[2]} />
@@ -82,6 +90,9 @@ export default function Dashboard() {
 
         {!loading && !error && (
           <>
+            {/* Summary dashboard panel */}
+            <SummaryPanel students={students} summary={summary} />
+
             {/* Filter bar */}
             <div className="mb-5">
               <FilterBar
@@ -104,7 +115,7 @@ export default function Dashboard() {
                     key={student.id}
                     student={student}
                     staff={staff}
-                    onInterventionUpdate={refreshStudent}
+                    onInterventionUpdate={handleInterventionUpdate}
                   />
                 ))}
               </div>
