@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    @apply bg-slate-50 text-slate-800 antialiased;
+    font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+  }
+  #root {
+    @apply min-h-screen;
+  }
+}
+
+@layer utilities {
+  .tier-1-border { @apply border-l-4 border-green-500; }
+  .tier-2-border { @apply border-l-4 border-amber-500; }
+  .tier-3-border { @apply border-l-4 border-red-500; }
+}
