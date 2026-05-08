@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { triageStudent } from '../services/claudeAPI';
-import { saveTriageResult, loadTriage, saveInterventions, loadInterventions, updateRecommendation } from '../services/storage';
-import { addSnapshot } from '../services/storage';
+import { saveTriageResult, saveInterventions, loadInterventions, updateRecommendation, addSnapshot } from '../services/storage';
 
 const STATUS_FLOW = ['Pending', 'Assigned', 'In Progress', 'Implemented'];
 
@@ -12,23 +11,31 @@ const STATUS_COLORS = {
   Implemented: 'bg-green-100 text-green-700',
 };
 
-export default function TriagePanel({ student, staff, onInterventionUpdate }) {
-  const [triage, setTriage] = useState(null);
+const TIER_COLORS = {
+  1: 'text-green-700 bg-green-50 border-green-200',
+  2: 'text-amber-700 bg-amber-50 border-amber-200',
+  3: 'text-red-700 bg-red-50 border-red-200',
+};
+
+export default function TriagePanel({
+  student, staff, autoTriage, cachedTriage, onTriageComplete, onInterventionUpdate,
+}) {
+  const [triage, setTriage] = useState(cachedTriage);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [recommendations, setRecommendations] = useState([]);
+  const [recommendations, setRecommendations] = useState(
+    () => loadInterventions()[student.id] ?? []
+  );
   const [editingIdx, setEditingIdx] = useState(null);
   const [editDraft, setEditDraft] = useState({});
 
+  // Auto-trigger on first expand when no cached result exists
   useEffect(() => {
-    // Load cached triage result
-    const cached = loadTriage()[student.id];
-    if (cached) setTriage(cached);
-
-    // Load saved recommendations
-    const savedRecs = loadInterventions()[student.id] ?? [];
-    setRecommendations(savedRecs);
-  }, [student.id]);
+    if (autoTriage && !triage) {
+      runTriage();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function runTriage() {
     setLoading(true);
@@ -37,6 +44,7 @@ export default function TriagePanel({ student, staff, onInterventionUpdate }) {
       const result = await triageStudent(student);
       setTriage(result);
       saveTriageResult(student.id, result);
+      onTriageComplete(result);
 
       // Only seed recommendations if none exist yet
       const existing = loadInterventions()[student.id] ?? [];
@@ -52,7 +60,7 @@ export default function TriagePanel({ student, staff, onInterventionUpdate }) {
         saveInterventions(student.id, seeded);
       }
     } catch (err) {
-      setError(err.message || 'Triage failed — check your API key.');
+      setError(err.message || 'Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -126,51 +134,67 @@ export default function TriagePanel({ student, staff, onInterventionUpdate }) {
     setRecommendations(updated);
   }
 
-  const tierColor = {
-    1: 'text-green-700 bg-green-50 border-green-200',
-    2: 'text-amber-700 bg-amber-50 border-amber-200',
-    3: 'text-red-700 bg-red-50 border-red-200',
-  };
-
   return (
     <div className="animate-expandIn px-6 pb-6 pt-2 bg-white border-t border-slate-100">
-      {/* AI Triage Summary */}
-      {triage ? (
-        <div className={`rounded-lg border p-4 mb-5 text-sm ${tierColor[triage.tier]}`}>
+
+      {/* Loading skeleton */}
+      {loading && (
+        <div>
+          <div className="flex items-center gap-2 mb-4 text-sm text-slate-500">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
+            </span>
+            Analyzing student profile…
+          </div>
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Error state */}
+      {!loading && error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-4 mb-5">
+          <p className="text-sm font-medium text-red-700 mb-1">Triage couldn't complete</p>
+          <p className="text-xs text-red-500 mb-3">{error}</p>
+          <button
+            onClick={runTriage}
+            className="px-3 py-1.5 text-xs font-medium bg-white border border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* Triage result */}
+      {!loading && !error && triage && (
+        <div className={`rounded-lg border p-4 mb-5 text-sm ${TIER_COLORS[triage.tier]}`}>
           <div className="font-semibold mb-1">AI Classification: Tier {triage.tier}</div>
           <p>{triage.rationale}</p>
           {triage.historicalNotes && (
             <p className="mt-2 opacity-80 italic">Historical context: {triage.historicalNotes}</p>
           )}
         </div>
-      ) : (
+      )}
+
+      {/* No triage yet and not loading — shouldn't normally be visible since autoTriage fires on mount,
+          but shown if user somehow lands here without autoTriage (e.g. after clearing localStorage) */}
+      {!loading && !error && !triage && (
         <div className="mb-5">
-          {loading ? (
-            <div className="flex items-center gap-2 text-sm text-slate-500">
-              <span className="inline-block w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-              Running AI triage…
-            </div>
-          ) : (
-            <div>
-              {error && (
-                <p className="text-sm text-red-600 mb-2">{error}</p>
-              )}
-              <button
-                onClick={runTriage}
-                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Run AI Triage
-              </button>
-              <p className="text-xs text-slate-400 mt-1">
-                Uses Claude AI to classify tier and generate personalized recommendations.
-              </p>
-            </div>
-          )}
+          <button
+            onClick={runTriage}
+            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Run AI Triage
+          </button>
         </div>
       )}
 
       {/* Recommendations */}
-      {recommendations.length > 0 && (
+      {!loading && recommendations.length > 0 && (
         <div>
           <h3 className="text-sm font-semibold text-slate-700 mb-3">
             Intervention Recommendations
@@ -198,18 +222,37 @@ export default function TriagePanel({ student, staff, onInterventionUpdate }) {
         </div>
       )}
 
-      {/* Re-run triage */}
-      {triage && (
+      {/* Re-run link */}
+      {!loading && triage && (
         <div className="mt-4 pt-4 border-t border-slate-100">
           <button
             onClick={runTriage}
-            disabled={loading}
             className="text-xs text-slate-400 hover:text-blue-600 transition-colors"
           >
-            {loading ? 'Running…' : 'Re-run AI triage'}
+            Re-run AI triage
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+function SkeletonCard() {
+  return (
+    <div className="border border-slate-200 rounded-lg p-4 bg-slate-50 animate-pulse">
+      <div className="flex justify-between mb-3">
+        <div className="h-3 bg-slate-200 rounded w-28" />
+        <div className="h-3 bg-slate-200 rounded w-16" />
+      </div>
+      <div className="space-y-2 mb-3">
+        <div className="h-3 bg-slate-200 rounded w-full" />
+        <div className="h-3 bg-slate-200 rounded w-5/6" />
+        <div className="h-3 bg-slate-200 rounded w-4/6" />
+      </div>
+      <div className="flex gap-2">
+        <div className="h-3 bg-slate-200 rounded w-20" />
+        <div className="h-3 bg-slate-200 rounded w-24" />
+      </div>
     </div>
   );
 }
@@ -220,14 +263,6 @@ function RecommendationCard({
   onApprove, onAssignStaff, onAdvanceStatus, onUpdateNote,
   onEditDraftChange,
 }) {
-  const STATUS_COLORS = {
-    Pending: 'bg-slate-100 text-slate-600',
-    Assigned: 'bg-blue-100 text-blue-700',
-    'In Progress': 'bg-amber-100 text-amber-700',
-    Implemented: 'bg-green-100 text-green-700',
-  };
-
-  const STATUS_FLOW = ['Pending', 'Assigned', 'In Progress', 'Implemented'];
   const nextStatus = STATUS_FLOW[STATUS_FLOW.indexOf(rec.status) + 1];
   const assignedMember = staff.find((s) => s.id === rec.assignedStaffId);
 
@@ -292,7 +327,6 @@ function RecommendationCard({
             <span>📅 {rec.timeframe}</span>
           </div>
 
-          {/* Staff assignment */}
           <div className="flex items-center gap-2 mb-3">
             <label className="text-xs text-slate-500 shrink-0">Assign to:</label>
             <select
@@ -312,7 +346,6 @@ function RecommendationCard({
             )}
           </div>
 
-          {/* Note */}
           <div className="mb-3">
             <input
               type="text"
@@ -323,7 +356,6 @@ function RecommendationCard({
             />
           </div>
 
-          {/* Actions */}
           <div className="flex items-center gap-2">
             {!rec.approvedAt && (
               <button

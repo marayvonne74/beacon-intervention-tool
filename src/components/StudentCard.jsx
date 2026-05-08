@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import TriagePanel from './TriagePanel';
 import { TIER_COLORS, TIER_LABELS } from '../utils/urgencyScore';
+import { loadTriage } from '../services/storage';
 
 const BORDER_CLASSES = {
   1: 'border-l-4 border-l-green-500',
@@ -16,27 +17,35 @@ const STATUS_LABELS = {
 
 export default function StudentCard({ student, staff, onInterventionUpdate }) {
   const [expanded, setExpanded] = useState(false);
+  // In-memory cache: populated after first successful triage so re-expands are instant
+  const [cachedTriage, setCachedTriage] = useState(
+    () => loadTriage()[student.id] ?? null
+  );
+  const hasExpandedOnce = useRef(false);
 
   const colors = TIER_COLORS[student.tier];
   const border = BORDER_CLASSES[student.tier];
   const statusInfo = STATUS_LABELS[student.interventionStatus] || STATUS_LABELS.unreviewed;
 
-  const urgencyLevel =
-    student.urgencyScore >= 60 ? 'High' :
-    student.urgencyScore >= 35 ? 'Medium' : 'Low';
-
   const urgencyColor =
     student.urgencyScore >= 60 ? 'text-red-600' :
     student.urgencyScore >= 35 ? 'text-amber-600' : 'text-green-600';
+
+  function handleToggle() {
+    if (!expanded) hasExpandedOnce.current = true;
+    setExpanded((v) => !v);
+  }
+
+  // autoTriage = true only on the very first expand when no cached result exists
+  const autoTriage = hasExpandedOnce.current && !cachedTriage;
 
   return (
     <div
       className={`bg-white rounded-xl shadow-sm ${border} overflow-hidden transition-shadow hover:shadow-md`}
     >
-      {/* Card header — always visible */}
       <button
         className="w-full text-left px-5 py-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-        onClick={() => setExpanded((v) => !v)}
+        onClick={handleToggle}
         aria-expanded={expanded}
       >
         <div className="flex items-center justify-between gap-3">
@@ -99,11 +108,13 @@ export default function StudentCard({ student, staff, onInterventionUpdate }) {
         </div>
       </button>
 
-      {/* Expandable triage panel */}
       {expanded && (
         <TriagePanel
           student={student}
           staff={staff}
+          autoTriage={autoTriage}
+          cachedTriage={cachedTriage}
+          onTriageComplete={(result) => setCachedTriage(result)}
           onInterventionUpdate={onInterventionUpdate}
         />
       )}
