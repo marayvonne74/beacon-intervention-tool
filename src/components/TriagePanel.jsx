@@ -18,7 +18,7 @@ const TIER_COLORS = {
 };
 
 export default function TriagePanel({
-  student, staff, autoTriage, cachedTriage, onTriageComplete, onInterventionUpdate,
+  student, staff, autoTriage, bulkTriageLoading, cachedTriage, onTriageComplete, onInterventionUpdate,
 }) {
   const [triage, setTriage] = useState(cachedTriage);
   const [loading, setLoading] = useState(false);
@@ -29,9 +29,19 @@ export default function TriagePanel({
   const [editingIdx, setEditingIdx] = useState(null);
   const [editDraft, setEditDraft] = useState({});
 
-  // Auto-trigger on first expand when no cached result exists
+  // When bulk triage completes while this panel is already open, sync the result in
   useEffect(() => {
-    if (autoTriage && !triage) {
+    if (cachedTriage && !triage) {
+      setTriage(cachedTriage);
+      const saved = loadInterventions()[student.id] ?? [];
+      if (saved.length > 0) setRecommendations(saved);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cachedTriage]);
+
+  // Per-card auto-trigger: only fires if bulk is not already handling this student
+  useEffect(() => {
+    if (autoTriage && !triage && !bulkTriageLoading) {
       runTriage();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -137,8 +147,8 @@ export default function TriagePanel({
   return (
     <div className="animate-expandIn px-6 pb-6 pt-2 bg-white border-t border-slate-100">
 
-      {/* Loading skeleton */}
-      {loading && (
+      {/* Loading skeleton — shown for both bulk background triage and manual re-run */}
+      {(loading || bulkTriageLoading) && (
         <div>
           <div className="flex items-center gap-2 mb-4 text-sm text-slate-500">
             <span className="relative flex h-2 w-2">

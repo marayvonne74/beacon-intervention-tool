@@ -1,7 +1,6 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import TriagePanel from './TriagePanel';
 import { TIER_COLORS, TIER_LABELS } from '../utils/urgencyScore';
-import { loadTriage } from '../services/storage';
 
 const BORDER_CLASSES = {
   1: 'border-l-4 border-l-green-500',
@@ -15,13 +14,23 @@ const STATUS_LABELS = {
   resolved: { label: 'Resolved', cls: 'bg-green-100 text-green-700' },
 };
 
-export default function StudentCard({ student, staff, onInterventionUpdate }) {
+export default function StudentCard({
+  student, staff, onInterventionUpdate,
+  // Bulk triage props from Dashboard
+  bulkTriageResult, bulkTriageLoading,
+}) {
   const [expanded, setExpanded] = useState(false);
-  // In-memory cache: populated after first successful triage so re-expands are instant
-  const [cachedTriage, setCachedTriage] = useState(
-    () => loadTriage()[student.id] ?? null
-  );
+  // In-memory cache: seeded from bulk result or from manual triage
+  const [cachedTriage, setCachedTriage] = useState(bulkTriageResult ?? null);
   const hasExpandedOnce = useRef(false);
+
+  // When bulk triage finishes for this student, update our local cache
+  // so re-expands are instant and the pulsing dot disappears
+  useEffect(() => {
+    if (bulkTriageResult && !cachedTriage) {
+      setCachedTriage(bulkTriageResult);
+    }
+  }, [bulkTriageResult]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const colors = TIER_COLORS[student.tier];
   const border = BORDER_CLASSES[student.tier];
@@ -36,8 +45,8 @@ export default function StudentCard({ student, staff, onInterventionUpdate }) {
     setExpanded((v) => !v);
   }
 
-  // autoTriage = true only on the very first expand when no cached result exists
-  const autoTriage = hasExpandedOnce.current && !cachedTriage;
+  // Only trigger per-card autoTriage if bulk isn't handling this student
+  const autoTriage = hasExpandedOnce.current && !cachedTriage && !bulkTriageLoading;
 
   return (
     <div
@@ -72,11 +81,19 @@ export default function StudentCard({ student, staff, onInterventionUpdate }) {
             )}
           </div>
 
-          {/* Right: badges */}
+          {/* Right: badges + pulsing dot while bulk triage is pending */}
           <div className="flex items-center gap-2 shrink-0">
-            <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${colors.badge}`}>
-              {TIER_LABELS[student.tier]}
-            </span>
+            <div className="relative">
+              <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${colors.badge}`}>
+                {TIER_LABELS[student.tier]}
+              </span>
+              {bulkTriageLoading && (
+                <span className="absolute -top-1 -right-1 flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-500" />
+                </span>
+              )}
+            </div>
             <div className="text-right hidden xs:block">
               <div className={`text-base font-bold leading-none ${urgencyColor}`}>
                 {student.urgencyScore}
@@ -113,7 +130,8 @@ export default function StudentCard({ student, staff, onInterventionUpdate }) {
           student={student}
           staff={staff}
           autoTriage={autoTriage}
-          cachedTriage={cachedTriage}
+          bulkTriageLoading={bulkTriageLoading}
+          cachedTriage={cachedTriage ?? bulkTriageResult}
           onTriageComplete={(result) => setCachedTriage(result)}
           onInterventionUpdate={onInterventionUpdate}
         />

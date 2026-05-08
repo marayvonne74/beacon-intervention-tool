@@ -7,6 +7,7 @@ import EmptyState from './EmptyState';
 import { useStudents } from '../hooks/useStudents';
 import { useStaff } from '../hooks/useStaff';
 import { useInterventionSummary } from '../hooks/useInterventionSummary';
+import { useBulkTriage } from '../hooks/useBulkTriage';
 
 export default function Dashboard() {
   const { students, loading, error, refreshStudent } = useStudents();
@@ -15,11 +16,15 @@ export default function Dashboard() {
   const [filters, setFilters] = useState({ tier: 'all', grade: 'all', status: 'all' });
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  // Single callback: refresh per-student status + summary metrics simultaneously
   const handleInterventionUpdate = useCallback((studentId) => {
     refreshStudent(studentId);
     refreshSummary();
   }, [refreshStudent, refreshSummary]);
+
+  // Bulk triage fires automatically for all uncached students once roster loads
+  const { triageResults, triageStatus, progress } = useBulkTriage(students, {
+    onStudentComplete: handleInterventionUpdate,
+  });
 
   const filtered = useMemo(() => {
     return students.filter((s) => {
@@ -54,11 +59,23 @@ export default function Dashboard() {
           </div>
 
           <div className="flex items-center gap-4">
+            {/* Bulk triage progress indicator */}
+            {progress.running && (
+              <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500">
+                <span className="relative flex h-2 w-2 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-500" />
+                </span>
+                Analyzing students… {progress.completed} of {progress.total} complete
+              </div>
+            )}
+
             <div className="hidden sm:flex items-center gap-2">
               <TierPill tier={3} count={tierCounts[3]} />
               <TierPill tier={2} count={tierCounts[2]} />
               <TierPill tier={1} count={tierCounts[1]} />
             </div>
+
             <button
               onClick={() => setSettingsOpen(true)}
               className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg px-3 py-1.5 hover:bg-slate-50 transition-colors"
@@ -71,6 +88,17 @@ export default function Dashboard() {
             </button>
           </div>
         </div>
+
+        {/* Mobile progress bar */}
+        {progress.running && (
+          <div className="sm:hidden px-4 pb-2 flex items-center gap-2 text-xs text-slate-500">
+            <span className="relative flex h-2 w-2 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-500" />
+            </span>
+            Analyzing students… {progress.completed} of {progress.total}
+          </div>
+        )}
       </header>
 
       {/* Main content */}
@@ -90,10 +118,8 @@ export default function Dashboard() {
 
         {!loading && !error && (
           <>
-            {/* Summary dashboard panel */}
             <SummaryPanel students={students} summary={summary} />
 
-            {/* Filter bar */}
             <div className="mb-5">
               <FilterBar
                 filters={filters}
@@ -102,7 +128,6 @@ export default function Dashboard() {
               />
             </div>
 
-            {/* Student list */}
             {filtered.length === 0 ? (
               <EmptyState
                 tier={filters.tier !== 'all' ? parseInt(filters.tier) : 'all'}
@@ -116,6 +141,11 @@ export default function Dashboard() {
                     student={student}
                     staff={staff}
                     onInterventionUpdate={handleInterventionUpdate}
+                    bulkTriageResult={triageResults[student.id] ?? null}
+                    bulkTriageLoading={
+                      triageStatus[student.id] === 'queued' ||
+                      triageStatus[student.id] === 'loading'
+                    }
                   />
                 ))}
               </div>
